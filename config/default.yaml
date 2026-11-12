@@ -1,0 +1,86 @@
+# Configuration for the Administrative Complexity Index (ACI) pipeline.
+# Every parameter that affects a published number lives here.
+
+seed: 20260726
+
+collection:
+  polite_delay_seconds: 0.05
+  max_workers: 12
+  min_words: 120            # documents shorter than this are not procedures
+  max_chars: 400000         # guard against pathological pages
+
+  govuk:
+    enabled: true
+    formats:                # procedural content types, capped for balance
+      guidance: 12000
+      detailed_guide: 9000
+      form: 4900
+      transaction: 240
+      notice: 4000
+      manual_section: 2500
+      hmrc_manual_section: 6000
+      answer: 2000
+      help_page: 500
+      statutory_guidance: 2000
+  boe:
+    enabled: true
+    date_from: "2019-01-01"
+    date_to: "2026-06-30"
+    sections: ["3", "5A", "5B"]  # III: other provisions (grants, calls); V-A/B: official notices
+    max_documents: 14000
+  ecfr:
+    enabled: true
+    max_parts: 4000          # CFR parts cited by PRA collections
+  eurlex:
+    enabled: true
+    max_documents: 6000
+  sitemap_sources:
+    enabled: true
+    canada: 6000
+    australia: 2500
+    newzealand: 2500
+    unitedstates: 2500   # the sitemap holds ~1500 pages, so this is not binding
+    us_business: 4000
+    us_tax: 6000
+
+burden:
+  pra_inventory_url: "https://www.reginfo.gov/public/do/PRAXML?type=inventory"
+  min_annual_responses: 1
+  winsorise_pct: 0.01
+
+index:
+  dimensions:
+    - length
+    - syntactic_complexity
+    - legal_density
+    - cross_references
+    - exceptions
+    - requirements
+    - steps
+    - dependencies
+    - ambiguity
+    - cognitive_load
+    - legal_knowledge
+    - documentary_effort
+    - conditional_decisions
+    - redundancy
+    - clarity
+  scaling: percentile_rank      # within-corpus, language-neutral
+  candidate_models: [equal_weight, pca, efa, irt_graded, expert_weight]
+  n_factors: 4
+  bootstrap_draws: 1000
+
+llm:
+  model: "Qwen/Qwen2.5-14B-Instruct"
+  fallback_model: "meta-llama/Llama-3.1-8B-Instruct"
+  temperature: 0.0
+  max_new_tokens: 320
+  max_input_chars: 12000
+  batch_size: 16
+  runs_for_consistency: 3
+  temperature_consistency: 0.3
+
+analysis:
+  readability_indices: [flesch, flesch_kincaid, smog, gunning_fog, ari, coleman_liau, lix, rix]
+  cv_folds: 10
+  cluster_k_range: [2, 3, 4, 5, 6, 7, 8]

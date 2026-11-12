@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rating administrative documents — __CODER__</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#666; --line:#ddd; --bg:#fafaf8; --accent:#25406b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.55 Georgia,"Times New Roman",serif; color:var(--ink); background:var(--bg); }
+  header { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line);
+           padding:.7rem 1.2rem; display:flex; gap:1rem; align-items:center; z-index:10; }
+  header .who { font-weight:700; }
+  header .count { color:var(--muted); font-size:.9rem; }
+  .bar { flex:1; height:6px; background:#eee; border-radius:3px; overflow:hidden; }
+  .bar span { display:block; height:100%; background:var(--accent); width:0; transition:width .2s; }
+  button { font:inherit; font-size:.9rem; padding:.4rem .8rem; border:1px solid var(--line);
+           background:#fff; border-radius:4px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  main { max-width:1220px; margin:0 auto; padding:1.2rem; display:grid;
+         grid-template-columns: 1.35fr 1fr; gap:1.4rem; align-items:start; }
+  @media (max-width:1000px) { main { grid-template-columns:1fr; } }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:6px; padding:1.1rem 1.3rem; }
+  .doc h2 { font-size:1.12rem; margin:.1rem 0 .2rem; }
+  .doc .meta { color:var(--muted); font-size:.85rem; margin-bottom:.9rem; }
+  .doc .text { white-space:pre-wrap; max-height:62vh; overflow:auto; font-size:.95rem;
+               border-top:1px solid var(--line); padding-top:.9rem; }
+  fieldset { border:0; padding:0; margin:0 0 1.15rem; }
+  legend { font-weight:700; font-size:.95rem; margin-bottom:.15rem; }
+  .hint { color:var(--muted); font-size:.83rem; margin:0 0 .45rem; }
+  .scale { display:flex; gap:.25rem; flex-wrap:wrap; }
+  .scale label { flex:1; min-width:2.1rem; text-align:center; border:1px solid var(--line);
+                 border-radius:4px; padding:.4rem .1rem; cursor:pointer; font-size:.9rem;
+                 font-family:system-ui,sans-serif; }
+  .scale input { position:absolute; opacity:0; width:0; }
+  .scale label:hover { border-color:var(--accent); }
+  .scale input:checked + span { font-weight:700; }
+  .scale label:has(input:checked) { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .ends { display:flex; justify-content:space-between; color:var(--muted);
+          font-size:.78rem; margin-top:.2rem; }
+  input[type=number] { font:inherit; width:5.5rem; padding:.35rem .45rem;
+                       border:1px solid var(--line); border-radius:4px; }
+  .nav { display:flex; gap:.6rem; align-items:center; margin-top:.4rem; }
+  .nav .spacer { flex:1; }
+  details.rubric { margin:0 auto 1rem; max-width:1220px; padding:0 1.2rem; }
+  details.rubric pre { white-space:pre-wrap; font:13px/1.5 ui-monospace,monospace;
+                       background:#fff; border:1px solid var(--line); border-radius:6px; padding:1rem; }
+  .done { max-width:640px; margin:3rem auto; text-align:center; }
+  .saved { color:var(--muted); font-size:.82rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="who">__CODER__</span>
+  <span class="count" id="count"></span>
+  <div class="bar"><span id="fill"></span></div>
+  <button id="export" class="primary">Download my ratings</button>
+</header>
+
+<details class="rubric">
+  <summary>The rubric — read once, then refer back as needed</summary>
+  <pre id="rubric"></pre>
+</details>
+
+<main id="app"></main>
+
+<script>
+const CODER = "__CODER__";
+const RUBRIC = __RUBRIC__;
+const ITEMS = __ITEMS__;
+const KEY = "aci-coding-" + CODER;
+
+const SCALES = [
+  { id:"cognitive_load", label:"Cognitive load",
+    hint:"How much mental effort does a member of the intended audience need to work out what they have to do?",
+    low:"1 — one obvious action", high:"10 — must reconstruct the procedure" },
+  { id:"legal_knowledge", label:"Required legal knowledge",
+    hint:"How much prior legal or technical knowledge is needed before the document becomes usable?",
+    low:"1 — none, everyday language", high:"10 — professional advice needed" },
+  { id:"clarity", label:"Clarity",
+    hint:"How clearly does the document communicate what must be done?",
+    low:"1 — very unclear", high:"10 — exemplary" },
+];
+const COUNTS = [
+  { id:"n_requirements", label:"Number of requirements",
+    hint:"Distinct things the reader must supply, prove or do." },
+  { id:"n_documents", label:"Number of documents",
+    hint:"Distinct documents, certificates or forms the reader must obtain or submit." },
+];
+
+let store = JSON.parse(localStorage.getItem(KEY) || "{}");
+let position = ITEMS.findIndex(it => !store[it.item_id]);
+if (position < 0) position = ITEMS.length;
+
+document.getElementById("rubric").textContent = RUBRIC;
+
+function persist() { localStorage.setItem(KEY, JSON.stringify(store)); }
+
+function progress() {
+  const done = Object.keys(store).length;
+  document.getElementById("count").textContent = done + " of " + ITEMS.length + " rated";
+  document.getElementById("fill").style.width = (100 * done / ITEMS.length) + "%";
+}
+
+function scaleField(field, value) {
+  const buttons = Array.from({length:10}, (_, i) => {
+    const n = i + 1, on = value === n ? " checked" : "";
+    return `<label><input type="radio" name="${field.id}" value="${n}"${on}><span>${n}</span></label>`;
+  }).join("");
+  return `<fieldset>
+    <legend>${field.label}</legend>
+    <p class="hint">${field.hint}</p>
+    <div class="scale">${buttons}</div>
+    <div class="ends"><span>${field.low}</span><span>${field.high}</span></div>
+  </fieldset>`;
+}
+
+function countField(field, value) {
+  return `<fieldset>
+    <legend>${field.label}</legend>
+    <p class="hint">${field.hint}</p>
+    <input type="number" min="0" max="99" step="1" name="${field.id}"
+           value="${value ?? ""}" placeholder="0">
+  </fieldset>`;
+}
+
+function render() {
+  progress();
+  const app = document.getElementById("app");
+
+  if (position >= ITEMS.length) {
+    app.style.display = "block";
+    app.innerHTML = `<div class="done panel">
+      <h2>All ${ITEMS.length} passages rated</h2>
+      <p>Press <strong>Download my ratings</strong> above and send the file back.
+      Your answers stay in this browser until you clear it, so you can re-download
+      at any time.</p>
+      <p><button id="back">Go back and review</button></p>
+    </div>`;
+    document.getElementById("back").onclick = () => { position = ITEMS.length - 1; render(); };
+    return;
+  }
+
+  app.style.display = "grid";
+  const item = ITEMS[position];
+  const prior = store[item.item_id] || {};
+  const meta = [item.organisation, item.language === "es" ? "Spanish" : "English"]
+    .filter(Boolean).join(" · ");
+
+  app.innerHTML = `
+    <section class="panel doc">
+      <h2>${item.title}</h2>
+      <div class="meta">${meta}</div>
+      <div class="text">${item.text.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}</div>
+    </section>
+    <section class="panel">
+      <form id="form">
+        ${SCALES.map(f => scaleField(f, prior[f.id])).join("")}
+        ${COUNTS.map(f => countField(f, prior[f.id])).join("")}
+        <div class="nav">
+          <button type="button" id="prev" ${position === 0 ? "disabled" : ""}>Previous</button>
+          <span class="spacer"></span>
+          <span class="saved" id="saved"></span>
+          <button type="submit" class="primary" id="next">Save and next</button>
+        </div>
+      </form>
+    </section>`;
+
+  const form = document.getElementById("form");
+  form.oninput = () => { save(false); document.getElementById("saved").textContent = "saved"; };
+  form.onsubmit = e => {
+    e.preventDefault();
+    if (!save(true)) return;
+    position++; render(); window.scrollTo(0, 0);
+  };
+  document.getElementById("prev").onclick = () => { position--; render(); window.scrollTo(0, 0); };
+}
+
+function save(strict) {
+  const item = ITEMS[position];
+  const data = new FormData(document.getElementById("form"));
+  const record = { item_id:item.item_id, doc_id:item.doc_id, coder:CODER,
+                   rated_at:new Date().toISOString() };
+  for (const f of SCALES) {
+    const v = data.get(f.id);
+    if (v) record[f.id] = Number(v);
+  }
+  for (const f of COUNTS) {
+    const v = data.get(f.id);
+    if (v !== null && v !== "") record[f.id] = Number(v);
+  }
+  const missing = [...SCALES, ...COUNTS].filter(f => record[f.id] === undefined);
+  if (strict && missing.length) {
+    alert("Still to answer: " + missing.map(f => f.label).join(", "));
+    return false;
+  }
+  if (!missing.length || !strict) { store[item.item_id] = record; persist(); progress(); }
+  return true;
+}
+
+document.getElementById("export").onclick = () => {
+  const cols = ["coder","item_id","doc_id","cognitive_load","legal_knowledge","clarity",
+                "n_requirements","n_documents","rated_at"];
+  const rows = ITEMS.map(it => store[it.item_id]).filter(Boolean);
+  if (!rows.length) { alert("Nothing rated yet."); return; }
+  const csv = [cols.join(",")].concat(rows.map(r =>
+    cols.map(c => {
+      const v = r[c] ?? "";
+      return /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v;
+    }).join(","))).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = "ratings_" + CODER + ".csv"; a.click();
+  URL.revokeObjectURL(url);
+};
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input,textarea")) return;
+  if (e.key === "ArrowRight") document.getElementById("next")?.click();
+  if (e.key === "ArrowLeft") document.getElementById("prev")?.click();
+});
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Data and results are distributed separately
+data/
+outputs/
+logs/
+envs/
+*.parquet
+*.jsonl
+*.jsonl.gz
+# Local files
+.env
+__pycache__/
+*.pyc
+.DS_Store
