@@ -78,6 +78,7 @@ Further analyses:
     sbatch slurm/42_score_global.sbatch             # global model rating (benchmark)
     python scripts/global_rating_benchmark.py       # benchmark and human-validation intervals
     python scripts/sensitivity_checks.py            # context, counts, language, excerpting, profiles
+    python scripts/criterion_stability.py           # stability of the estimates between approvals
 
 Every result can then be checked against its source table:
 
